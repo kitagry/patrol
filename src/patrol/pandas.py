@@ -4,7 +4,7 @@ from typing import Generic, Optional, TypeVar
 
 import pandas as pd
 
-from patrol._core.validation import validate_dataframe
+from patrol._pandas.validation import validate_dataframe
 
 SchemaT_co = TypeVar("SchemaT_co", covariant=True)
 
