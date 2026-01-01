@@ -4,7 +4,7 @@ import pandas as pd
 import pytest
 
 from patrol.pandas import DataFrame
-from patrol.validators import Range, Unique
+from patrol.validators import In, Range, Unique
 
 
 class AgeSchema(Protocol):
@@ -13,6 +13,10 @@ class AgeSchema(Protocol):
 
 class UserIdSchema(Protocol):
     user_id: Annotated[int, Unique()]
+
+
+class StatusSchema(Protocol):
+    status: Annotated[str, In(["pending", "approved", "rejected"])]
 
 
 def test_range_validator_accepts_values_within_range():
@@ -48,3 +52,17 @@ def test_unique_validator_rejects_duplicate_values():
     df = pd.DataFrame({"user_id": [1, 2, 2, 3]})
     with pytest.raises(ValueError, match="user_id.*duplicate"):
         DataFrame[UserIdSchema](df)
+
+
+def test_in_validator_accepts_allowed_values():
+    """In validator accepts values within the allowed set"""
+    df = pd.DataFrame({"status": ["pending", "approved", "rejected", "pending"]})
+    result = DataFrame[StatusSchema](df)
+    assert isinstance(result, pd.DataFrame)
+
+
+def test_in_validator_rejects_disallowed_values():
+    """In validator rejects values not in the allowed set"""
+    df = pd.DataFrame({"status": ["pending", "invalid", "approved"]})
+    with pytest.raises(ValueError, match="status.*allowed values"):
+        DataFrame[StatusSchema](df)

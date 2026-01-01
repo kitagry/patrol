@@ -28,3 +28,14 @@ class Unique:
     Example:
         user_id: Annotated[int, Unique()]
     """
+
+
+@dataclass
+class In:
+    """Validate that column values are within a set of allowed values.
+
+    Example:
+        status: Annotated[str, In(["pending", "approved", "rejected"])]
+    """
+
+    allowed_values: list

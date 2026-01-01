@@ -7,7 +7,7 @@ try:
 except ImportError:
     raise ImportError("Polars is not installed. Install it with: pip install patrol[polars]")
 
-from patrol.validators import Range, Unique
+from patrol.validators import In, Range, Unique
 
 
 def apply_validator(series: "pl.Series", validator: Any, col_name: str) -> None:
@@ -16,7 +16,7 @@ def apply_validator(series: "pl.Series", validator: Any, col_name: str) -> None:
 
     Args:
         series: polars Series to validate
-        validator: Validator instance (e.g., Range, Unique)
+        validator: Validator instance (e.g., Range, Unique, In)
         col_name: column name for error messages
 
     Raises:
@@ -26,6 +26,8 @@ def apply_validator(series: "pl.Series", validator: Any, col_name: str) -> None:
         _validate_range(series, validator, col_name)
     elif isinstance(validator, Unique):
         _validate_unique(series, col_name)
+    elif isinstance(validator, In):
+        _validate_in(series, validator, col_name)
     else:
         raise ValueError(f"Unknown validator type: {type(validator)}")
 
@@ -42,3 +44,9 @@ def _validate_unique(series: "pl.Series", col_name: str) -> None:
     """Validate that all values in series are unique (no duplicates)."""
     if series.is_duplicated().any():
         raise ValueError(f"Column '{col_name}': contains duplicate values")
+
+
+def _validate_in(series: "pl.Series", validator: In, col_name: str) -> None:
+    """Validate that all values in series are within the allowed set."""
+    if not series.is_in(validator.allowed_values).all():
+        raise ValueError(f"Column '{col_name}': contains values not in allowed values")

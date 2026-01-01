@@ -4,7 +4,7 @@ from typing import Any
 
 import pandas as pd
 
-from patrol.validators import Range, Unique
+from patrol.validators import In, Range, Unique
 
 
 def apply_validator(series: pd.Series, validator: Any, col_name: str) -> None:
@@ -13,7 +13,7 @@ def apply_validator(series: pd.Series, validator: Any, col_name: str) -> None:
 
     Args:
         series: pandas Series to validate
-        validator: Validator instance (e.g., Range, Unique)
+        validator: Validator instance (e.g., Range, Unique, In)
         col_name: column name for error messages
 
     Raises:
@@ -23,6 +23,8 @@ def apply_validator(series: pd.Series, validator: Any, col_name: str) -> None:
         _validate_range(series, validator, col_name)
     elif isinstance(validator, Unique):
         _validate_unique(series, col_name)
+    elif isinstance(validator, In):
+        _validate_in(series, validator, col_name)
     else:
         raise ValueError(f"Unknown validator type: {type(validator)}")
 
@@ -39,3 +41,9 @@ def _validate_unique(series: pd.Series, col_name: str) -> None:
     """Validate that all values in series are unique (no duplicates)."""
     if series.duplicated().any():
         raise ValueError(f"Column '{col_name}': contains duplicate values")
+
+
+def _validate_in(series: pd.Series, validator: In, col_name: str) -> None:
+    """Validate that all values in series are within the allowed set."""
+    if not series.isin(validator.allowed_values).all():
+        raise ValueError(f"Column '{col_name}': contains values not in allowed values")
