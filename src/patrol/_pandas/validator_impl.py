@@ -4,7 +4,7 @@ from typing import Any
 
 import pandas as pd
 
-from patrol.validators import In, Range, Unique
+from patrol.validators import In, Range, Regex, Unique
 
 
 def apply_validator(series: pd.Series, validator: Any, col_name: str) -> None:
@@ -13,7 +13,7 @@ def apply_validator(series: pd.Series, validator: Any, col_name: str) -> None:
 
     Args:
         series: pandas Series to validate
-        validator: Validator instance (e.g., Range, Unique, In)
+        validator: Validator instance (e.g., Range, Unique, In, Regex)
         col_name: column name for error messages
 
     Raises:
@@ -25,6 +25,8 @@ def apply_validator(series: pd.Series, validator: Any, col_name: str) -> None:
         _validate_unique(series, col_name)
     elif isinstance(validator, In):
         _validate_in(series, validator, col_name)
+    elif isinstance(validator, Regex):
+        _validate_regex(series, validator, col_name)
     else:
         raise ValueError(f"Unknown validator type: {type(validator)}")
 
@@ -47,3 +49,9 @@ def _validate_in(series: pd.Series, validator: In, col_name: str) -> None:
     """Validate that all values in series are within the allowed set."""
     if not series.isin(validator.allowed_values).all():
         raise ValueError(f"Column '{col_name}': contains values not in allowed values")
+
+
+def _validate_regex(series: pd.Series, validator: Regex, col_name: str) -> None:
+    """Validate that all values in series match the regex pattern."""
+    if not series.str.match(validator.pattern).all():
+        raise ValueError(f"Column '{col_name}': contains values that don't match the pattern")

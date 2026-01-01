@@ -4,7 +4,7 @@ import pandas as pd
 import pytest
 
 from patrol.pandas import DataFrame
-from patrol.validators import In, Range, Unique
+from patrol.validators import In, Range, Regex, Unique
 
 
 class AgeSchema(Protocol):
@@ -17,6 +17,10 @@ class UserIdSchema(Protocol):
 
 class StatusSchema(Protocol):
     status: Annotated[str, In(["pending", "approved", "rejected"])]
+
+
+class EmailSchema(Protocol):
+    email: Annotated[str, Regex(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")]
 
 
 def test_range_validator_accepts_values_within_range():
@@ -66,3 +70,17 @@ def test_in_validator_rejects_disallowed_values():
     df = pd.DataFrame({"status": ["pending", "invalid", "approved"]})
     with pytest.raises(ValueError, match="status.*allowed values"):
         DataFrame[StatusSchema](df)
+
+
+def test_regex_validator_accepts_matching_values():
+    """Regex validator accepts values that match the pattern"""
+    df = pd.DataFrame({"email": ["user@example.com", "test@test.org", "admin@company.co.jp"]})
+    result = DataFrame[EmailSchema](df)
+    assert isinstance(result, pd.DataFrame)
+
+
+def test_regex_validator_rejects_non_matching_values():
+    """Regex validator rejects values that don't match the pattern"""
+    df = pd.DataFrame({"email": ["user@example.com", "invalid-email", "test@test.org"]})
+    with pytest.raises(ValueError, match="email.*pattern"):
+        DataFrame[EmailSchema](df)
