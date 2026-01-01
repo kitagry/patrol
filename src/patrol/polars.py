@@ -39,9 +39,9 @@ class DataFrame(pl.DataFrame, Generic[SchemaT_co]):
 
         return TypedDataFrame
 
-    def __new__(cls, data, *args, **kwargs):
+    def __init__(self, data, *args, **kwargs):
         """
-        Create DataFrame with optional schema validation.
+        Initialize DataFrame with optional schema validation.
 
         Args:
             data: Data to create DataFrame from (pl.DataFrame or dict/list)
@@ -52,14 +52,6 @@ class DataFrame(pl.DataFrame, Generic[SchemaT_co]):
             ValueError: If required column is missing
             TypeError: If column has wrong type
         """
-        # Create DataFrame instance
-        if isinstance(data, pl.DataFrame):
-            instance = data
-        else:
-            instance = pl.DataFrame(data, *args, **kwargs)
-
-        # Validate if schema is set
-        if cls._schema is not None:
-            validate_dataframe(instance, cls._schema)
-
-        return instance
+        pl.DataFrame.__init__(self, data, *args, **kwargs)  # type: ignore[misc]
+        if self._schema is not None:
+            validate_dataframe(self, self._schema)
