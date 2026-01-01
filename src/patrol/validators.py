@@ -43,10 +43,32 @@ class In:
 
 @dataclass
 class Regex:
-    """Validate that string values match a regular expression pattern.
+    r"""Validate that string values match a regular expression pattern.
 
     Example:
         email: Annotated[str, Regex(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')]
     """
 
     pattern: str
+
+
+@dataclass
+class MinLen:
+    """Validate that string values have a minimum length.
+
+    Example:
+        username: Annotated[str, MinLen(3)]
+    """
+
+    min_length: int
+
+
+@dataclass
+class MaxLen:
+    """Validate that string values have a maximum length.
+
+    Example:
+        username: Annotated[str, MaxLen(20)]
+    """
+
+    max_length: int

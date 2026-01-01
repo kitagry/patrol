@@ -4,7 +4,7 @@ from typing import Any
 
 import pandas as pd
 
-from patrol.validators import In, Range, Regex, Unique
+from patrol.validators import In, MaxLen, MinLen, Range, Regex, Unique
 
 
 def apply_validator(series: pd.Series, validator: Any, col_name: str) -> None:
@@ -13,7 +13,7 @@ def apply_validator(series: pd.Series, validator: Any, col_name: str) -> None:
 
     Args:
         series: pandas Series to validate
-        validator: Validator instance (e.g., Range, Unique, In, Regex)
+        validator: Validator instance (e.g., Range, Unique, In, Regex, MinLen, MaxLen)
         col_name: column name for error messages
 
     Raises:
@@ -27,6 +27,10 @@ def apply_validator(series: pd.Series, validator: Any, col_name: str) -> None:
         _validate_in(series, validator, col_name)
     elif isinstance(validator, Regex):
         _validate_regex(series, validator, col_name)
+    elif isinstance(validator, MinLen):
+        _validate_minlen(series, validator, col_name)
+    elif isinstance(validator, MaxLen):
+        _validate_maxlen(series, validator, col_name)
     else:
         raise ValueError(f"Unknown validator type: {type(validator)}")
 
@@ -55,3 +59,15 @@ def _validate_regex(series: pd.Series, validator: Regex, col_name: str) -> None:
     """Validate that all values in series match the regex pattern."""
     if not series.str.match(validator.pattern).all():
         raise ValueError(f"Column '{col_name}': contains values that don't match the pattern")
+
+
+def _validate_minlen(series: pd.Series, validator: MinLen, col_name: str) -> None:
+    """Validate that all string values have minimum length."""
+    if (series.str.len() < validator.min_length).any():
+        raise ValueError(f"Column '{col_name}': contains strings shorter than minimum length")
+
+
+def _validate_maxlen(series: pd.Series, validator: MaxLen, col_name: str) -> None:
+    """Validate that all string values have maximum length."""
+    if (series.str.len() > validator.max_length).any():
+        raise ValueError(f"Column '{col_name}': contains strings longer than maximum length")
