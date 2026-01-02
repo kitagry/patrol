@@ -1,5 +1,5 @@
 from datetime import date, datetime, timedelta
-from typing import Protocol
+from typing import Optional, Protocol
 
 import pandas as pd
 import pytest
@@ -22,6 +22,12 @@ class DatetimeSchema(Protocol):
     created_at: datetime
     event_date: date
     duration: timedelta
+
+
+class OptionalSchema(Protocol):
+    user_id: int
+    email: Optional[str]
+    age: Optional[int]
 
 
 def test_dataframe_class_getitem_returns_class():
@@ -125,3 +131,45 @@ def test_dataframe_timedelta_type_raises_on_wrong_type():
     )
     with pytest.raises(TypeError, match="Column 'duration' expected timedelta"):
         DataFrame[DatetimeSchema](df)
+
+
+def test_dataframe_raises_on_null_values_in_int_column():
+    """DataFrame raises error when int column contains null values"""
+    df = pd.DataFrame({"a": [1, 2, None]})
+    with pytest.raises(TypeError, match="Column 'a' expected int"):
+        DataFrame[SimpleSchema](df)
+
+
+def test_dataframe_raises_on_null_values_in_str_column():
+    """DataFrame raises error when str column contains null values"""
+    df = pd.DataFrame({"a": [1, 2, 3], "b": ["x", None, "z"]})
+
+    class SchemaWithStr(Protocol):
+        a: int
+        b: str
+
+    with pytest.raises(TypeError, match="Column 'b' expected str"):
+        DataFrame[SchemaWithStr](df)
+
+
+def test_dataframe_optional_int_accepts_null_values():
+    """DataFrame with Optional[int] accepts null values"""
+    df = pd.DataFrame(
+        {"user_id": [1, 2, 3], "email": ["a@b.com", None, "c@d.com"], "age": [20, None, 30]}
+    )
+    result = DataFrame[OptionalSchema](df)
+    assert isinstance(result, pd.DataFrame)
+    pd.testing.assert_frame_equal(result, df)
+
+
+def test_dataframe_optional_type_raises_on_wrong_type():
+    """DataFrame with Optional[int] still raises error for wrong type"""
+    df = pd.DataFrame(
+        {
+            "user_id": [1, 2, 3],
+            "email": ["a@b.com", "b@c.com", "c@d.com"],
+            "age": ["20", "25", "30"],
+        }
+    )
+    with pytest.raises(TypeError, match="Column 'age' expected int"):
+        DataFrame[OptionalSchema](df)
