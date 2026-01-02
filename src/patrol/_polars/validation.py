@@ -8,6 +8,13 @@ try:
 except ImportError:
     raise ImportError("Polars is not installed. Install it with: pip install patrol[polars]")
 
+from patrol.exceptions import ValidationError
+
+# Maximum number of invalid sample values to show in error messages
+MAX_SAMPLE_SIZE = 5
+# Maximum number of rows to check for type validation (performance optimization)
+MAX_CHECK_ROWS = 100
+
 
 def _is_datetime_dtype(dtype):
     """Check if dtype is a Datetime type (with any time unit)."""
@@ -83,10 +90,48 @@ def _extract_type_and_validators(annotation: type) -> tuple[type, list, bool]:
     return annotation, validators, is_optional
 
 
+def _raise_type_error_with_samples(
+    df: pl.DataFrame, col_name: str, expected_type: type, actual_dtype
+) -> None:
+    """Raise TypeError with sample invalid values."""
+    samples = []
+    total_invalid = 0
+
+    col_data = df[col_name].to_list()
+    for i, val in enumerate(col_data[:MAX_CHECK_ROWS]):
+        is_invalid = False
+        if val is not None:
+            if expected_type is int:
+                is_invalid = not isinstance(val, (int, bool)) or isinstance(val, bool)
+            elif expected_type is float:
+                is_invalid = not isinstance(val, (int, float, bool))
+            elif expected_type is str:
+                is_invalid = not isinstance(val, str)
+            elif expected_type is bool:
+                is_invalid = not isinstance(val, bool)
+            else:
+                is_invalid = not isinstance(val, expected_type)
+
+        if is_invalid:
+            total_invalid += 1
+            if len(samples) < MAX_SAMPLE_SIZE:
+                samples.append((i, val))
+
+    msg = f"Column '{col_name}' expected {expected_type.__name__}, got {actual_dtype}"
+
+    if samples:
+        total_str = f"{total_invalid}+" if total_invalid >= MAX_CHECK_ROWS else str(total_invalid)
+        msg += f"\n\nSample invalid values (showing first {len(samples)} of {total_str}):"
+        for idx, val in samples:
+            msg += f"\n  Row {idx}: {repr(val)} ({type(val).__name__})"
+
+    raise ValidationError(msg, column_name=col_name, invalid_samples=samples)
+
+
 def _check_column_exists(df: pl.DataFrame, col_name: str) -> None:
     """Check if a column exists in the DataFrame."""
     if col_name not in df.columns:
-        raise ValueError(f"Missing column: {col_name}")
+        raise ValidationError(f"Missing column: {col_name}", column_name=col_name)
 
 
 def _check_column_type(df: pl.DataFrame, col_name: str, expected_type: type) -> None:
@@ -98,21 +143,26 @@ def _check_column_type(df: pl.DataFrame, col_name: str, expected_type: type) -> 
     if isinstance(base_type, type) and issubclass(base_type, pl.DataType):
         col_dtype = df[col_name].dtype
         if col_dtype != base_type:
-            raise TypeError(f"Column '{col_name}' expected {base_type.__name__}, got {col_dtype}")
+            raise ValidationError(
+                f"Column '{col_name}' expected {base_type.__name__}, got {col_dtype}",
+                column_name=col_name,
+            )
         for validator in validators:
             apply_validator(df[col_name], validator, col_name)
         return
 
     if base_type not in TYPE_CHECKERS:
-        raise ValueError(f"Unsupported type: {base_type}")
+        raise ValidationError(f"Unsupported type: {base_type}", column_name=col_name)
 
     type_checker = TYPE_CHECKERS[base_type]
     col_dtype = df[col_name].dtype
     if not type_checker(col_dtype):
-        raise TypeError(f"Column '{col_name}' expected {base_type.__name__}, got {col_dtype}")
+        _raise_type_error_with_samples(df, col_name, base_type, col_dtype)
 
     if not is_optional and df[col_name].null_count() > 0:
-        raise TypeError(f"Column '{col_name}' is non-optional but contains null values")
+        raise ValidationError(
+            f"Column '{col_name}' is non-optional but contains null values", column_name=col_name
+        )
 
     for validator in validators:
         apply_validator(df[col_name], validator, col_name)
