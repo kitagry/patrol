@@ -1,9 +1,11 @@
-from typing import Protocol
+from datetime import date, datetime, timedelta
+from typing import Annotated, Optional, Protocol
 
 import pandas as pd
 import pytest
 
 from patrol.pandas import DataFrame
+from patrol.validators import Range, Unique
 
 
 class SimpleSchema(Protocol):
@@ -15,6 +17,23 @@ class MultiTypeSchema(Protocol):
     float_col: float
     str_col: str
     bool_col: bool
+
+
+class DatetimeSchema(Protocol):
+    created_at: datetime
+    event_date: date
+    duration: timedelta
+
+
+class OptionalSchema(Protocol):
+    user_id: int
+    email: Optional[str]
+    age: Optional[int]
+
+
+class PandasDtypeSchema(Protocol):
+    category: pd.CategoricalDtype
+    value: pd.Int64Dtype
 
 
 def test_dataframe_class_getitem_returns_class():
@@ -65,3 +84,268 @@ def test_dataframe_with_extra_columns():
     df = pd.DataFrame({"a": [1, 2, 3], "b": ["x", "y", "z"]})
     result = DataFrame[SimpleSchema](df)
     pd.testing.assert_frame_equal(result, df)
+
+
+def test_dataframe_datetime_types():
+    """Support datetime, date, and timedelta types"""
+    df = pd.DataFrame(
+        {
+            "created_at": pd.to_datetime(["2024-01-01 12:00:00", "2024-01-02 13:30:00"]),
+            "event_date": pd.to_datetime(["2024-01-01", "2024-01-02"]),
+            "duration": pd.to_timedelta(["1 days", "2 days 3 hours"]),
+        }
+    )
+    result = DataFrame[DatetimeSchema](df)
+    assert isinstance(result, pd.DataFrame)
+    pd.testing.assert_frame_equal(result, df)
+
+
+def test_dataframe_datetime_type_raises_on_wrong_type():
+    """DataFrame raises error when datetime column has wrong type"""
+    df = pd.DataFrame(
+        {
+            "created_at": ["2024-01-01", "2024-01-02"],  # string instead of datetime
+            "event_date": pd.to_datetime(["2024-01-01", "2024-01-02"]),
+            "duration": pd.to_timedelta(["1 days", "2 days"]),
+        }
+    )
+    with pytest.raises(TypeError, match="Column 'created_at' expected datetime"):
+        DataFrame[DatetimeSchema](df)
+
+
+def test_dataframe_date_type_raises_on_wrong_type():
+    """DataFrame raises error when date column has wrong type"""
+    df = pd.DataFrame(
+        {
+            "created_at": pd.to_datetime(["2024-01-01 12:00:00", "2024-01-02 13:30:00"]),
+            "event_date": [1, 2],  # int instead of date
+            "duration": pd.to_timedelta(["1 days", "2 days"]),
+        }
+    )
+    with pytest.raises(TypeError, match="Column 'event_date' expected date"):
+        DataFrame[DatetimeSchema](df)
+
+
+def test_dataframe_timedelta_type_raises_on_wrong_type():
+    """DataFrame raises error when timedelta column has wrong type"""
+    df = pd.DataFrame(
+        {
+            "created_at": pd.to_datetime(["2024-01-01 12:00:00", "2024-01-02 13:30:00"]),
+            "event_date": pd.to_datetime(["2024-01-01", "2024-01-02"]),
+            "duration": [1.5, 2.5],  # float instead of timedelta
+        }
+    )
+    with pytest.raises(TypeError, match="Column 'duration' expected timedelta"):
+        DataFrame[DatetimeSchema](df)
+
+
+def test_dataframe_raises_on_null_values_in_int_column():
+    """DataFrame raises error when int column contains null values"""
+    df = pd.DataFrame({"a": [1, 2, None]})
+    with pytest.raises(TypeError, match="Column 'a' expected int"):
+        DataFrame[SimpleSchema](df)
+
+
+def test_dataframe_raises_on_null_values_in_str_column():
+    """DataFrame raises error when str column contains null values"""
+    df = pd.DataFrame({"a": [1, 2, 3], "b": ["x", None, "z"]})
+
+    class SchemaWithStr(Protocol):
+        a: int
+        b: str
+
+    with pytest.raises(TypeError, match="Column 'b' expected str"):
+        DataFrame[SchemaWithStr](df)
+
+
+def test_dataframe_optional_int_accepts_null_values():
+    """DataFrame with Optional[int] accepts null values"""
+    df = pd.DataFrame(
+        {"user_id": [1, 2, 3], "email": ["a@b.com", None, "c@d.com"], "age": [20, None, 30]}
+    )
+    result = DataFrame[OptionalSchema](df)
+    assert isinstance(result, pd.DataFrame)
+    pd.testing.assert_frame_equal(result, df)
+
+
+def test_dataframe_optional_type_raises_on_wrong_type():
+    """DataFrame with Optional[int] still raises error for wrong type"""
+    df = pd.DataFrame(
+        {
+            "user_id": [1, 2, 3],
+            "email": ["a@b.com", "b@c.com", "c@d.com"],
+            "age": ["20", "25", "30"],
+        }
+    )
+    with pytest.raises(TypeError, match="Column 'age' expected int"):
+        DataFrame[OptionalSchema](df)
+
+
+def test_dataframe_pandas_categorical_dtype():
+    """DataFrame accepts pandas CategoricalDtype"""
+    df = pd.DataFrame(
+        {
+            "category": pd.Categorical(["A", "B", "A"]),
+            "value": pd.array([1, 2, None], dtype=pd.Int64Dtype()),
+        }
+    )
+    result = DataFrame[PandasDtypeSchema](df)
+    assert isinstance(result, pd.DataFrame)
+    pd.testing.assert_frame_equal(result, df)
+
+
+def test_dataframe_pandas_dtype_raises_on_wrong_type():
+    """DataFrame raises error when pandas dtype doesn't match"""
+    df = pd.DataFrame({"category": ["A", "B", "A"], "value": [1, 2, 3]})
+    with pytest.raises(TypeError, match="Column 'category' expected CategoricalDtype"):
+        DataFrame[PandasDtypeSchema](df)
+
+
+class IndexIntSchema(Protocol):
+    __index__: int
+    value: float
+
+
+def test_dataframe_with_index_type_validates_correct_index():
+    """DataFrame[Schema](df) passes validation for correct index type"""
+    df = pd.DataFrame({"value": [1.0, 2.0, 3.0]}, index=[0, 1, 2])
+    result = DataFrame[IndexIntSchema](df)
+    assert isinstance(result, pd.DataFrame)
+    pd.testing.assert_frame_equal(result, df)
+
+
+def test_dataframe_with_index_type_raises_on_wrong_type():
+    """DataFrame[Schema](df) raises error for wrong index type"""
+    df = pd.DataFrame({"value": [1.0, 2.0, 3.0]}, index=["a", "b", "c"])
+    with pytest.raises(TypeError, match="Index expected int"):
+        DataFrame[IndexIntSchema](df)
+
+
+class IndexWithNameSchema(Protocol):
+    __index__: Annotated[int, "user_id"]
+    value: float
+
+
+def test_dataframe_with_index_name_validates_correct_index():
+    """DataFrame[Schema](df) passes validation for correct index name"""
+    df = pd.DataFrame({"value": [1.0, 2.0, 3.0]}, index=pd.Index([0, 1, 2], name="user_id"))
+    result = DataFrame[IndexWithNameSchema](df)
+    assert isinstance(result, pd.DataFrame)
+    pd.testing.assert_frame_equal(result, df)
+
+
+def test_dataframe_with_index_name_raises_on_wrong_name():
+    """DataFrame[Schema](df) raises error for wrong index name"""
+    df = pd.DataFrame({"value": [1.0, 2.0, 3.0]}, index=pd.Index([0, 1, 2], name="id"))
+    with pytest.raises(ValueError, match="Index name expected 'user_id', got 'id'"):
+        DataFrame[IndexWithNameSchema](df)
+
+
+def test_dataframe_with_index_name_raises_on_missing_name():
+    """DataFrame[Schema](df) raises error when index name is None"""
+    df = pd.DataFrame({"value": [1.0, 2.0, 3.0]}, index=[0, 1, 2])
+    with pytest.raises(ValueError, match="Index name expected 'user_id', got None"):
+        DataFrame[IndexWithNameSchema](df)
+
+
+class MultiIndexSchema(Protocol):
+    __index__: tuple[str, int]
+    value: float
+
+
+def test_dataframe_with_multiindex_validates_correct_types():
+    """DataFrame[Schema](df) passes validation for correct MultiIndex types"""
+    df = pd.DataFrame(
+        {"value": [1.0, 2.0, 3.0]},
+        index=pd.MultiIndex.from_tuples([("a", 0), ("b", 1), ("c", 2)]),
+    )
+    result = DataFrame[MultiIndexSchema](df)
+    assert isinstance(result, pd.DataFrame)
+    pd.testing.assert_frame_equal(result, df)
+
+
+def test_dataframe_with_multiindex_raises_on_wrong_type():
+    """DataFrame[Schema](df) raises error for wrong MultiIndex type"""
+    df = pd.DataFrame(
+        {"value": [1.0, 2.0, 3.0]},
+        index=pd.MultiIndex.from_tuples([(0, 0), (1, 1), (2, 2)]),
+    )
+    with pytest.raises(TypeError, match="Index level 0 expected str"):
+        DataFrame[MultiIndexSchema](df)
+
+
+def test_dataframe_with_multiindex_raises_on_single_index():
+    """DataFrame[Schema](df) raises error when MultiIndex expected but got single index"""
+    df = pd.DataFrame({"value": [1.0, 2.0, 3.0]}, index=[0, 1, 2])
+    with pytest.raises(TypeError, match="Expected MultiIndex with 2 levels, got Index"):
+        DataFrame[MultiIndexSchema](df)
+
+
+class MultiIndexWithNamesSchema(Protocol):
+    __index__: Annotated[tuple[str, int], ("region", "user_id")]
+    value: float
+
+
+def test_dataframe_with_multiindex_names_validates_correct_names():
+    """DataFrame[Schema](df) passes validation for correct MultiIndex names"""
+    df = pd.DataFrame(
+        {"value": [1.0, 2.0, 3.0]},
+        index=pd.MultiIndex.from_tuples(
+            [("a", 0), ("b", 1), ("c", 2)], names=["region", "user_id"]
+        ),
+    )
+    result = DataFrame[MultiIndexWithNamesSchema](df)
+    assert isinstance(result, pd.DataFrame)
+    pd.testing.assert_frame_equal(result, df)
+
+
+def test_dataframe_with_multiindex_raises_on_wrong_names():
+    """DataFrame[Schema](df) raises error for wrong MultiIndex names"""
+    df = pd.DataFrame(
+        {"value": [1.0, 2.0, 3.0]},
+        index=pd.MultiIndex.from_tuples([("a", 0), ("b", 1), ("c", 2)], names=["area", "id"]),
+    )
+    with pytest.raises(
+        ValueError, match="Index names expected \\('region', 'user_id'\\), got \\('area', 'id'\\)"
+    ):
+        DataFrame[MultiIndexWithNamesSchema](df)
+
+
+class IndexWithValidatorSchema(Protocol):
+    __index__: Annotated[int, Range(0, 10)]
+    value: float
+
+
+def test_dataframe_with_index_validator_passes_validation():
+    """DataFrame[Schema](df) passes validation when index values satisfy validator"""
+    df = pd.DataFrame({"value": [1.0, 2.0, 3.0]}, index=[0, 5, 10])
+    result = DataFrame[IndexWithValidatorSchema](df)
+    assert isinstance(result, pd.DataFrame)
+    pd.testing.assert_frame_equal(result, df)
+
+
+def test_dataframe_with_index_validator_raises_on_invalid_value():
+    """DataFrame[Schema](df) raises error when index value violates validator"""
+    df = pd.DataFrame({"value": [1.0, 2.0, 3.0]}, index=[0, 5, 15])
+    with pytest.raises(ValueError, match="values must be in"):
+        DataFrame[IndexWithValidatorSchema](df)
+
+
+class IndexWithNameAndValidatorSchema(Protocol):
+    __index__: Annotated[int, "user_id", Range(0, 100), Unique()]
+    value: float
+
+
+def test_dataframe_with_index_name_and_validator_passes():
+    """DataFrame[Schema](df) passes validation with both name and validators"""
+    df = pd.DataFrame({"value": [1.0, 2.0, 3.0]}, index=pd.Index([0, 50, 100], name="user_id"))
+    result = DataFrame[IndexWithNameAndValidatorSchema](df)
+    assert isinstance(result, pd.DataFrame)
+    pd.testing.assert_frame_equal(result, df)
+
+
+def test_dataframe_with_index_unique_validator_raises_on_duplicates():
+    """DataFrame[Schema](df) raises error when index has duplicate values"""
+    df = pd.DataFrame({"value": [1.0, 2.0, 3.0]}, index=pd.Index([0, 50, 50], name="user_id"))
+    with pytest.raises(ValueError, match="contains duplicate values"):
+        DataFrame[IndexWithNameAndValidatorSchema](df)
