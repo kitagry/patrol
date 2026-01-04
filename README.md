@@ -1,5 +1,7 @@
 # Pavise
 
+[![Documentation Status](https://readthedocs.org/projects/pavise/badge/?version=latest)](https://pavise.readthedocs.io/en/latest/?badge=latest)
+
 DataFrame validation library using Python Protocol for structural subtyping.
 
 ## About the Name
@@ -17,6 +19,10 @@ Like its namesake, this library serves as a shield for your data. Whether you're
 - Optional runtime validation
 - No inheritance required
 - Support for both pandas and polars backends
+
+## Documentation
+
+Full documentation is available at [https://pavise.readthedocs.io/](https://pavise.readthedocs.io/en/latest/index.html)
 
 ## Installation
 
@@ -124,10 +130,24 @@ validated = DataFrame[SimpleSchema](df)  # OK
 
 ## Supported Types
 
-- `int`
-- `float`
-- `str`
-- `bool`
+### Basic Types
+- `int` - Integer values
+- `float` - Floating point values
+- `str` - String values
+- `bool` - Boolean values
+
+### Date/Time Types
+- `datetime` - Date and time values
+- `date` - Date-only values
+- `timedelta` - Time duration values
+
+### Generic Types
+- `Optional[T]` - Nullable types (e.g., `Optional[int]`, `Optional[str]`)
+- `Literal[...]` - Specific literal values (e.g., `Literal["a", "b", "c"]`, `Literal[1, 2, 3]`)
+
+### Backend-Specific Types
+- **pandas**: `pd.CategoricalDtype`, `pd.Int64Dtype`, and other Extension dtypes
+- **polars**: `pl.Categorical`, `pl.Int64`, and other polars DataTypes
 
 ## Development
 

@@ -106,6 +106,23 @@ Add validators using ``typing.Annotated``:
    # Runtime validation with validators
    validated_df = DataFrame[UserSchema](raw_df)
 
+Using Literal Types
+~~~~~~~~~~~~~~~~~~~
+
+Restrict column values to specific literals using ``Literal``:
+
+.. code-block:: python
+
+   from typing import Literal, Protocol
+
+   class OrderSchema(Protocol):
+       order_id: int
+       status: Literal["pending", "approved", "rejected"]
+       priority: Literal[1, 2, 3]
+
+   # Only these exact values are allowed
+   validated_df = DataFrame[OrderSchema](raw_df)
+
 Next Steps
 ----------
 

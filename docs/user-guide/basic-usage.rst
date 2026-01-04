@@ -133,6 +133,39 @@ Datetime Types
 * ``datetime.date``: Date-only values
 * ``datetime.timedelta``: Time duration values
 
+Generic Types
+~~~~~~~~~~~~~
+
+* ``Optional[T]``: Nullable types (see "Handling Optional Columns" above)
+* ``Literal[...]``: Restricts values to specific literals
+
+The ``Literal`` type is useful for columns that should only contain specific values:
+
+.. code-block:: python
+
+   from typing import Literal, Protocol
+
+   class OrderSchema(Protocol):
+       order_id: int
+       status: Literal["pending", "approved", "rejected"]
+       priority: Literal[1, 2, 3]
+
+   # Valid data
+   df = pd.DataFrame({
+       "order_id": [1, 2, 3],
+       "status": ["pending", "approved", "rejected"],
+       "priority": [1, 2, 3]
+   })
+   validated_df = DataFrame[OrderSchema](df)  # OK
+
+   # Invalid data
+   df_invalid = pd.DataFrame({
+       "order_id": [1],
+       "status": ["invalid"],  # Not in Literal values
+       "priority": [1]
+   })
+   DataFrame[OrderSchema](df_invalid)  # ValidationError
+
 pandas ExtensionDtype
 ~~~~~~~~~~~~~~~~~~~~~
 

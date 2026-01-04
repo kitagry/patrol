@@ -39,16 +39,17 @@ Validate data from database queries:
 
 .. code-block:: python
 
-   from typing import Protocol, Annotated, Optional
+   from typing import Protocol, Annotated, Literal
    from pavise.pandas import DataFrame
-   from pavise.validators import In
+   from pavise.validators import Range
    import pandas as pd
    import sqlalchemy
+   import datetime
 
    class OrderSchema(Protocol):
        order_id: int
        customer_id: int
-       status: Annotated[str, In(["pending", "processing", "shipped", "delivered"])]
+       status: Literal["pending", "processing", "shipped", "delivered"]
        amount: Annotated[float, Range(0.0, float('inf'))]
        created_at: datetime.datetime
 
