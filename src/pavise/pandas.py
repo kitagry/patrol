@@ -5,6 +5,9 @@ from typing import Any, Generic, Optional, TypeVar
 import pandas as pd
 
 from pavise._pandas.validation import validate_dataframe
+from pavise.types import NotRequiredColumn
+
+__all__ = ["DataFrame", "NotRequiredColumn"]
 
 SchemaT_co = TypeVar("SchemaT_co", covariant=True)
 

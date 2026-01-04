@@ -8,6 +8,9 @@ except ImportError:
     raise ImportError("Polars is not installed. Install it with: pip install pavise[polars]")
 
 from pavise._polars.validation import validate_dataframe
+from pavise.types import NotRequiredColumn
+
+__all__ = ["DataFrame", "NotRequiredColumn"]
 
 SchemaT_co = TypeVar("SchemaT_co", covariant=True)
 

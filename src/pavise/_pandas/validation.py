@@ -4,12 +4,21 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
-from typing import Annotated, Callable, Literal, Union, get_args, get_origin, get_type_hints
+from typing import (
+    Annotated,
+    Callable,
+    Literal,
+    Union,
+    get_args,
+    get_origin,
+    get_type_hints,
+)
 
 import numpy as np
 import pandas as pd
 
 from pavise.exceptions import ValidationError
+from pavise.types import NotRequiredColumn
 
 # Special column name for index validation
 INDEX_COLUMN_NAME = "__index__"
@@ -86,6 +95,9 @@ def validate_dataframe(df: pd.DataFrame, schema: type, strict: bool = False) -> 
         if col_name == INDEX_COLUMN_NAME:
             _check_index_type(df, col_type)
         else:
+            is_not_required = isinstance(col_type, type) and issubclass(col_type, NotRequiredColumn)
+            if is_not_required and col_name not in df.columns:
+                continue
             _check_column_exists(df, col_name)
             _check_column_type(df, col_name, col_type)
 
@@ -99,22 +111,29 @@ def validate_dataframe(df: pd.DataFrame, schema: type, strict: bool = False) -> 
             raise ValidationError(f"Strict mode: unexpected columns {sorted(extra_cols)}")
 
 
-def _extract_type_and_validators(annotation: type) -> tuple[type, list, bool]:
+def _extract_type_and_validators(annotation: type) -> tuple[type, list, bool, bool]:
     """
-    Extract base type, validators, and nullable flag from a type annotation.
+    Extract base type, validators, nullable flag, and not-required flag from a type annotation.
 
     Args:
-        annotation: Type annotation (e.g., int, Optional[int], or Annotated[int, Range(0, 100)])
+        annotation: Type annotation (e.g., int, Optional[int], NotRequiredColumn[int],
+            or Annotated[int, Range(0, 100)])
 
     Returns:
-        Tuple of (base_type, validators, is_optional)
-        - For Annotated[int, Range(0, 100)]: (int, [Range(0, 100)], False)
-        - For int: (int, [], False)
-        - For Optional[int]: (int, [], True)
-        - For Annotated[Optional[int], Range(0, 100)]: (int, [Range(0, 100)], True)
+        Tuple of (base_type, validators, is_optional, is_not_required)
+        - For Annotated[int, Range(0, 100)]: (int, [Range(0, 100)], False, False)
+        - For int: (int, [], False, False)
+        - For Optional[int]: (int, [], True, False)
+        - For NotRequiredColumn[int]: (int, [], False, True)
+        - For NotRequiredColumn[Optional[int]]: (int, [], True, True)
     """
     validators = []
     is_optional = False
+    is_not_required = False
+
+    if isinstance(annotation, type) and issubclass(annotation, NotRequiredColumn):
+        is_not_required = True
+        annotation = getattr(annotation, "_inner_type", annotation)
 
     if get_origin(annotation) is Annotated:
         args = get_args(annotation)
@@ -128,9 +147,9 @@ def _extract_type_and_validators(annotation: type) -> tuple[type, list, bool]:
         if len(args) == 2 and type(None) in args:
             is_optional = True
             base_type = args[0] if args[1] is type(None) else args[1]
-            return base_type, validators, is_optional
+            return base_type, validators, is_optional, is_not_required
 
-    return annotation, validators, is_optional
+    return annotation, validators, is_optional, is_not_required
 
 
 def _extract_index_name_type_and_validators(
@@ -265,7 +284,9 @@ def _check_column_type(df: pd.DataFrame, col_name: str, expected_type: type) -> 
     """Check if a column has the expected type and apply validators."""
     from pavise._pandas.validator_impl import apply_validator
 
-    base_type, validators, is_optional = _extract_type_and_validators(expected_type)
+    base_type, validators, is_optional, _is_not_required = _extract_type_and_validators(
+        expected_type
+    )
 
     if isinstance(base_type, type) and issubclass(base_type, pd.api.extensions.ExtensionDtype):
         col_dtype = df[col_name].dtype

@@ -123,6 +123,31 @@ Restrict column values to specific literals using ``Literal``:
    # Only these exact values are allowed
    validated_df = DataFrame[OrderSchema](raw_df)
 
+Optional Columns
+~~~~~~~~~~~~~~~~
+
+Use ``NotRequiredColumn[T]`` for columns that may not exist in the DataFrame:
+
+.. code-block:: python
+
+   from typing import Optional, Protocol
+   from pavise.pandas import DataFrame, NotRequiredColumn
+
+   class UserSchema(Protocol):
+       user_id: int
+       name: str
+       age: NotRequiredColumn[int]  # Column can be missing
+       email: NotRequiredColumn[Optional[str]]  # Column can be missing, or contain None
+
+   # Both of these are valid
+   df1 = pd.DataFrame({"user_id": [1], "name": ["Alice"]})  # age and email missing
+   df2 = pd.DataFrame({"user_id": [1], "name": ["Alice"], "age": [25]})  # only email missing
+
+   validated_df1 = DataFrame[UserSchema](df1)  # OK
+   validated_df2 = DataFrame[UserSchema](df2)  # OK
+
+Note: ``NotRequiredColumn[T]`` means the column is optional, while ``Optional[T]`` means the column can contain ``None`` values. Use ``NotRequiredColumn[Optional[T]]`` for columns that are both optional and nullable.
+
 Next Steps
 ----------
 

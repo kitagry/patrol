@@ -6,6 +6,7 @@ import pytest
 
 from pavise.exceptions import ValidationError
 from pavise.pandas import DataFrame
+from pavise.types import NotRequiredColumn
 from pavise.validators import Range, Unique
 
 
@@ -40,6 +41,13 @@ class PandasDtypeSchema(Protocol):
 class LiteralSchema(Protocol):
     status: Literal["pending", "approved", "rejected"]
     priority: Literal[1, 2, 3]
+
+
+class NotRequiredSchema(Protocol):
+    user_id: int
+    name: str
+    age: NotRequiredColumn[int]
+    email: NotRequiredColumn[Optional[str]]
 
 
 def test_dataframe_class_getitem_returns_class():
@@ -423,3 +431,52 @@ def test_dataframe_with_literal_type_raises_error_for_wrong_type():
     )
     with pytest.raises(ValidationError, match="priority"):
         DataFrame[LiteralSchema](df)
+
+
+def test_dataframe_with_notrequired_missing_column():
+    """DataFrame[Schema] with NotRequired passes when optional column is missing"""
+    df = pd.DataFrame({"user_id": [1, 2, 3], "name": ["Alice", "Bob", "Charlie"]})
+    result = DataFrame[NotRequiredSchema](df)
+    assert isinstance(result, pd.DataFrame)
+    pd.testing.assert_frame_equal(result, df)
+
+
+def test_dataframe_with_notrequired_present_and_valid():
+    """DataFrame[Schema] with NotRequired validates type when column is present"""
+    df = pd.DataFrame(
+        {
+            "user_id": [1, 2, 3],
+            "name": ["Alice", "Bob", "Charlie"],
+            "age": [25, 30, 35],
+        }
+    )
+    result = DataFrame[NotRequiredSchema](df)
+    assert isinstance(result, pd.DataFrame)
+    pd.testing.assert_frame_equal(result, df)
+
+
+def test_dataframe_with_notrequired_present_and_invalid():
+    """DataFrame[Schema] with NotRequired raises error when column present but wrong type"""
+    df = pd.DataFrame(
+        {
+            "user_id": [1, 2, 3],
+            "name": ["Alice", "Bob", "Charlie"],
+            "age": ["25", "30", "35"],  # str instead of int
+        }
+    )
+    with pytest.raises(ValidationError, match="age"):
+        DataFrame[NotRequiredSchema](df)
+
+
+def test_dataframe_with_notrequired_optional_combination():
+    """DataFrame[Schema] with NotRequired[Optional[T]] allows None when column is present"""
+    df = pd.DataFrame(
+        {
+            "user_id": [1, 2, 3],
+            "name": ["Alice", "Bob", "Charlie"],
+            "email": ["alice@example.com", None, "charlie@example.com"],
+        }
+    )
+    result = DataFrame[NotRequiredSchema](df)
+    assert isinstance(result, pd.DataFrame)
+    pd.testing.assert_frame_equal(result, df)
