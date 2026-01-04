@@ -101,6 +101,9 @@ The API is identical across backends, but they validate against their respective
 Handling Optional Columns
 --------------------------
 
+Nullable Columns
+~~~~~~~~~~~~~~~~
+
 Use ``Optional[T]`` for nullable columns:
 
 .. code-block:: python
@@ -114,6 +117,40 @@ Use ``Optional[T]`` for nullable columns:
 
 Note: In pandas, nullable integers are stored as ``float64`` when they contain nulls.
 In polars, all types are nullable by default.
+
+Optional Columns
+~~~~~~~~~~~~~~~~
+
+Use ``NotRequiredColumn[T]`` for columns that may not exist in the DataFrame:
+
+.. code-block:: python
+
+   from typing import Optional
+   from pavise.pandas import DataFrame, NotRequiredColumn
+
+   class UserSchema(Protocol):
+       user_id: int
+       name: str
+       age: NotRequiredColumn[int]  # Column can be missing
+       email: NotRequiredColumn[Optional[str]]  # Column can be missing, or contain None
+
+   # Valid: age column is missing
+   df1 = pd.DataFrame({"user_id": [1], "name": ["Alice"]})
+   validated_df1 = DataFrame[UserSchema](df1)  # OK
+
+   # Valid: age column is present
+   df2 = pd.DataFrame({"user_id": [1], "name": ["Alice"], "age": [25]})
+   validated_df2 = DataFrame[UserSchema](df2)  # OK
+
+   # Invalid: age column is present but has wrong type
+   df3 = pd.DataFrame({"user_id": [1], "name": ["Alice"], "age": ["invalid"]})
+   DataFrame[UserSchema](df3)  # ValidationError
+
+Key differences:
+
+* ``Optional[T]``: Column must exist, but can contain ``None`` values
+* ``NotRequiredColumn[T]``: Column can be missing, but if present, must have type ``T`` (no ``None`` allowed)
+* ``NotRequiredColumn[Optional[T]]``: Column can be missing, and if present, can contain ``None`` values
 
 Supported Types
 ---------------

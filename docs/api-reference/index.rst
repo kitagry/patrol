@@ -8,5 +8,6 @@ This section contains the complete API documentation for Pavise, automatically g
 
    pandas
    polars
+   types
    validators
    exceptions

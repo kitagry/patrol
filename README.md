@@ -144,6 +144,7 @@ validated = DataFrame[SimpleSchema](df)  # OK
 ### Generic Types
 - `Optional[T]` - Nullable types (e.g., `Optional[int]`, `Optional[str]`)
 - `Literal[...]` - Specific literal values (e.g., `Literal["a", "b", "c"]`, `Literal[1, 2, 3]`)
+- `NotRequiredColumn[T]` - Optional columns (e.g., `NotRequiredColumn[int]`, `NotRequiredColumn[Optional[str]]`)
 
 ### Backend-Specific Types
 - **pandas**: `pd.CategoricalDtype`, `pd.Int64Dtype`, and other Extension dtypes
