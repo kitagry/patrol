@@ -11,6 +11,9 @@ import pandas as pd
 
 from pavise.exceptions import ValidationError
 
+# Special column name for index validation
+INDEX_COLUMN_NAME = "__index__"
+
 # Maximum number of invalid sample values to show in error messages
 MAX_SAMPLE_SIZE = 5
 
@@ -64,13 +67,14 @@ TYPE_CHECKERS = {
 }
 
 
-def validate_dataframe(df: pd.DataFrame, schema: type) -> None:
+def validate_dataframe(df: pd.DataFrame, schema: type, strict: bool = False) -> None:
     """
     Validate that a DataFrame conforms to a Protocol schema.
 
     Args:
         df: DataFrame to validate
         schema: Protocol type defining the expected schema
+        strict: If True, raise error on extra columns not in schema
 
     Raises:
         ValueError: If a required column is missing or type is unsupported
@@ -79,11 +83,20 @@ def validate_dataframe(df: pd.DataFrame, schema: type) -> None:
     expected_cols = get_type_hints(schema, include_extras=True)
 
     for col_name, col_type in expected_cols.items():
-        if col_name == "__index__":
+        if col_name == INDEX_COLUMN_NAME:
             _check_index_type(df, col_type)
         else:
             _check_column_exists(df, col_name)
             _check_column_type(df, col_name, col_type)
+
+    if strict:
+        schema_cols = set(expected_cols.keys())
+        if INDEX_COLUMN_NAME in schema_cols:
+            schema_cols.remove(INDEX_COLUMN_NAME)
+        df_cols = set(df.columns)
+        extra_cols = df_cols - schema_cols
+        if extra_cols:
+            raise ValidationError(f"Strict mode: unexpected columns {sorted(extra_cols)}")
 
 
 def _extract_type_and_validators(annotation: type) -> tuple[type, list, bool]:
