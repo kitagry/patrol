@@ -36,13 +36,14 @@ class DataFrame(pd.DataFrame, Generic[SchemaT_co]):
 
         return TypedDataFrame
 
-    def __init__(self, data, *args, **kwargs):
+    def __init__(self, data, *args, strict=False, **kwargs):
         """
         Initialize DataFrame with optional schema validation.
 
         Args:
             data: Data to create DataFrame from
             *args: Additional arguments passed to pd.DataFrame
+            strict: If True, raise error on extra columns not in schema
             **kwargs: Additional keyword arguments passed to pd.DataFrame
 
         Raises:
@@ -51,4 +52,4 @@ class DataFrame(pd.DataFrame, Generic[SchemaT_co]):
         """
         pd.DataFrame.__init__(self, data, *args, **kwargs)  # type: ignore[misc]
         if self._schema is not None:
-            validate_dataframe(self, self._schema)
+            validate_dataframe(self, self._schema, strict=strict)

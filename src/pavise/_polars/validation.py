@@ -67,13 +67,14 @@ TYPE_CHECKERS = {
 }
 
 
-def validate_dataframe(df: pl.DataFrame, schema: type) -> None:
+def validate_dataframe(df: pl.DataFrame, schema: type, strict: bool = False) -> None:
     """
     Validate that a Polars DataFrame conforms to a Protocol schema.
 
     Args:
         df: Polars DataFrame to validate
         schema: Protocol type defining the expected schema
+        strict: If True, raise error on extra columns not in schema
 
     Raises:
         ValueError: If a required column is missing or type is unsupported
@@ -84,6 +85,13 @@ def validate_dataframe(df: pl.DataFrame, schema: type) -> None:
     for col_name, col_type in expected_cols.items():
         _check_column_exists(df, col_name)
         _check_column_type(df, col_name, col_type)
+
+    if strict:
+        schema_cols = set(expected_cols.keys())
+        df_cols = set(df.columns)
+        extra_cols = df_cols - schema_cols
+        if extra_cols:
+            raise ValidationError(f"Strict mode: unexpected columns {sorted(extra_cols)}")
 
 
 def _extract_type_and_validators(annotation: type) -> tuple[type, list, bool]:

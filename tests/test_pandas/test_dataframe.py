@@ -366,3 +366,26 @@ def test_dataframe_with_index_unique_validator_raises_on_duplicates():
     df = pd.DataFrame({"value": [1.0, 2.0, 3.0]}, index=pd.Index([0, 50, 50], name="user_id"))
     with pytest.raises(ValidationError, match="contains duplicate values"):
         DataFrame[IndexWithNameAndValidatorSchema](df)
+
+
+def test_dataframe_ignores_extra_columns_by_default():
+    """DataFrame[Schema](df) ignores extra columns by default (strict=False)"""
+    df = pd.DataFrame({"a": [1, 2, 3], "extra": ["x", "y", "z"]})
+    result = DataFrame[SimpleSchema](df)
+    assert isinstance(result, pd.DataFrame)
+    assert "extra" in result.columns
+
+
+def test_dataframe_strict_mode_raises_on_extra_columns():
+    """DataFrame[Schema](df, strict=True) raises error when extra columns exist"""
+    df = pd.DataFrame({"a": [1, 2, 3], "extra": ["x", "y", "z"]})
+    with pytest.raises(ValidationError, match="unexpected columns"):
+        DataFrame[SimpleSchema](df, strict=True)
+
+
+def test_dataframe_strict_mode_passes_with_exact_columns():
+    """DataFrame[Schema](df, strict=True) passes when columns exactly match schema"""
+    df = pd.DataFrame({"a": [1, 2, 3]})
+    result = DataFrame[SimpleSchema](df, strict=True)
+    assert isinstance(result, pd.DataFrame)
+    pd.testing.assert_frame_equal(result, df)
