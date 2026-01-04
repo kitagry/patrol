@@ -1,6 +1,6 @@
 """Pandas backend for type-parameterized DataFrame with Protocol-based schema validation."""
 
-from typing import Generic, Optional, TypeVar
+from typing import Any, Generic, Optional, TypeVar
 
 import pandas as pd
 
@@ -36,7 +36,11 @@ class DataFrame(pd.DataFrame, Generic[SchemaT_co]):
 
         return TypedDataFrame
 
-    def __init__(self, data, *args, strict=False, **kwargs):
+    def __new__(cls, data: Any = None, *args: Any, strict: bool = False, **kwargs: Any):
+        """Create a new DataFrame instance."""
+        return super().__new__(cls)
+
+    def __init__(self, data: Any = None, *args: Any, strict: bool = False, **kwargs: Any) -> None:
         """
         Initialize DataFrame with optional schema validation.
 
