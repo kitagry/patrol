@@ -8,6 +8,7 @@ except ImportError:
     raise ImportError("Polars is not installed. Install it with: pip install pavise[polars]")
 
 from pavise._polars.spec import get_column_specs
+from pavise._polars.testing import build_for_test_dataframe, convert_data_to_dict
 from pavise._polars.validation import validate_dataframe
 from pavise.types import NotRequiredColumn
 
@@ -80,3 +81,32 @@ class DataFrame(pl.DataFrame, Generic[SchemaT_co]):
         }
 
         return cls(columns)
+
+    @classmethod
+    def for_test(cls, data) -> "DataFrame[SchemaT_co]":
+        """
+        Create a DataFrame for testing with partial data filled with sentinel values.
+
+        Specified columns are used as-is, while unspecified columns are filled with ANY.
+
+        Args:
+            data: Partial data (dict, DataFrame, etc.)
+
+        Returns:
+            DataFrame: DataFrame with specified columns and ANY values for missing columns
+
+        Raises:
+            ValueError: If data is empty, schema is not defined, or contains unknown columns
+        """
+        if cls._schema is None:
+            raise ValueError(
+                "Cannot use for_test() without a schema. Use DataFrame[Schema].for_test(...)"
+            )
+
+        # Convert data to dict and validate
+        data_dict, n_rows = convert_data_to_dict(data, cls._schema)
+
+        # Build columns
+        columns = build_for_test_dataframe(cls._schema, data_dict, n_rows)
+
+        return cls(columns, strict=False)
