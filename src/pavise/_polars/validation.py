@@ -14,6 +14,7 @@ from typing import (
     get_type_hints,
 )
 
+from pavise.testing import ANY
 from pavise.types import NotRequiredColumn
 
 try:
@@ -190,6 +191,10 @@ def _check_column_exists(df: pl.DataFrame, col_name: str) -> None:
 def _check_column_type(df: pl.DataFrame, col_name: str, expected_type: type) -> None:
     """Check if a column has the expected type and apply validators."""
     from pavise._polars.validator_impl import apply_validator
+
+    # Skip validation if all values in column are ANY sentinel
+    if all(value is ANY for value in df[col_name]):
+        return
 
     base_type, validators, is_optional, _is_not_required = _extract_type_and_validators(
         expected_type

@@ -18,6 +18,7 @@ import numpy as np
 import pandas as pd
 
 from pavise.exceptions import ValidationError
+from pavise.testing import ANY
 from pavise.types import NotRequiredColumn
 
 # Special column name for index validation
@@ -303,6 +304,10 @@ def _check_column_exists(df: pd.DataFrame, col_name: str) -> None:
 def _check_column_type(df: pd.DataFrame, col_name: str, expected_type: type) -> None:
     """Check if a column has the expected type and apply validators."""
     from pavise._pandas.validator_impl import apply_validator
+
+    # Skip validation if all values in column are ANY sentinel
+    if all(value is ANY for value in df[col_name]):
+        return
 
     base_type, validators, is_optional, _is_not_required = _extract_type_and_validators(
         expected_type

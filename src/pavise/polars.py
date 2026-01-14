@@ -1,36 +1,20 @@
 """Polars backend for type-parameterized DataFrame with Protocol-based schema validation."""
 
-from typing import Generic, Literal, Optional, TypeVar, get_args, get_origin, get_type_hints
+from typing import Generic, Optional, TypeVar
 
 try:
     import polars as pl
 except ImportError:
     raise ImportError("Polars is not installed. Install it with: pip install pavise[polars]")
 
+from pavise._polars.spec import get_column_specs
+from pavise._polars.testing import build_for_test_dataframe, convert_data_to_dict
 from pavise._polars.validation import validate_dataframe
 from pavise.types import NotRequiredColumn
 
 __all__ = ["DataFrame", "NotRequiredColumn"]
 
 SchemaT_co = TypeVar("SchemaT_co", covariant=True)
-
-
-def _get_dtype_for_type(base_type: type) -> pl.DataType:
-    """
-    Get polars dtype for a given Python type.
-
-    Args:
-        base_type: Python type (int, str, float, bool, datetime, date, timedelta)
-
-    Returns:
-        Polars DataType
-    """
-    from pavise._polars.validation import TYPE_TO_DTYPE
-
-    if isinstance(base_type, type) and issubclass(base_type, pl.DataType):
-        return base_type()
-
-    return TYPE_TO_DTYPE.get(base_type, pl.Utf8())
 
 
 class DataFrame(pl.DataFrame, Generic[SchemaT_co]):
@@ -80,7 +64,7 @@ class DataFrame(pl.DataFrame, Generic[SchemaT_co]):
             validate_dataframe(self, self._schema, strict=strict)
 
     @classmethod
-    def make_empty(cls):
+    def make_empty(cls) -> "DataFrame[SchemaT_co]":
         """
         Create an empty DataFrame with columns from the schema.
 
@@ -90,23 +74,39 @@ class DataFrame(pl.DataFrame, Generic[SchemaT_co]):
         if cls._schema is None:
             return cls({})
 
-        from pavise._polars.validation import _extract_type_and_validators
-
-        type_hints = get_type_hints(cls._schema, include_extras=True)
-        columns = {}
-
-        for col_name, col_type in type_hints.items():
-            base_type, _validators, is_optional, _is_not_required = _extract_type_and_validators(
-                col_type
-            )
-
-            if get_origin(base_type) is Literal:
-                literal_values = get_args(base_type)
-                if literal_values:
-                    first_value = literal_values[0]
-                    base_type = type(first_value)
-
-            dtype = _get_dtype_for_type(base_type)
-            columns[col_name] = pl.Series([], dtype=dtype)
+        column_specs = get_column_specs(cls._schema)
+        columns = {
+            col_name: pl.Series(col_name, [], dtype=spec.dtype)
+            for col_name, spec in column_specs.items()
+        }
 
         return cls(columns)
+
+    @classmethod
+    def for_test(cls, data) -> "DataFrame[SchemaT_co]":
+        """
+        Create a DataFrame for testing with partial data filled with sentinel values.
+
+        Specified columns are used as-is, while unspecified columns are filled with ANY.
+
+        Args:
+            data: Partial data (dict, DataFrame, etc.)
+
+        Returns:
+            DataFrame: DataFrame with specified columns and ANY values for missing columns
+
+        Raises:
+            ValueError: If data is empty, schema is not defined, or contains unknown columns
+        """
+        if cls._schema is None:
+            raise ValueError(
+                "Cannot use for_test() without a schema. Use DataFrame[Schema].for_test(...)"
+            )
+
+        # Convert data to dict and validate
+        data_dict, n_rows = convert_data_to_dict(data, cls._schema)
+
+        # Build columns
+        columns = build_for_test_dataframe(cls._schema, data_dict, n_rows)
+
+        return cls(columns, strict=False)
