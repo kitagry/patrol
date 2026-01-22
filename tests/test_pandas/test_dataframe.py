@@ -214,7 +214,7 @@ def test_dataframe_optional_type_raises_on_wrong_type():
             "age": ["20", "25", "30"],
         }
     )
-    with pytest.raises(ValidationError, match="Column 'age': expected int, got object"):
+    with pytest.raises(ValidationError, match="Column 'age': expected int, got (object|str)"):
         DataFrame[OptionalSchema](df)
 
 
