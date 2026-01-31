@@ -7,10 +7,10 @@ try:
 except ImportError:
     raise ImportError("Polars is not installed. Install it with: pip install pavise[polars]")
 
-from pavise._polars.validation import validate_dataframe
+from pavise._polars.validation import validate_dataframe, validate_lazyframe_schema
 from pavise.types import NotRequiredColumn
 
-__all__ = ["DataFrame", "NotRequiredColumn"]
+__all__ = ["DataFrame", "LazyFrame", "NotRequiredColumn"]
 
 SchemaT_co = TypeVar("SchemaT_co", covariant=True)
 
@@ -110,3 +110,81 @@ class DataFrame(pl.DataFrame, Generic[SchemaT_co]):
             columns[col_name] = pl.Series([], dtype=dtype)
 
         return cls(columns)
+
+
+class LazyFrame(pl.LazyFrame, Generic[SchemaT_co]):
+    """
+    Type-parameterized LazyFrame with runtime schema validation for Polars.
+
+    Schema validation happens at construction time using collect_schema().
+    Value-based validators (Range, Unique, etc.) are only checked on collect().
+    """
+
+    _schema: Optional[type] = None
+
+    def __class_getitem__(cls, schema: type):
+        """Create a new LazyFrame class with schema validation."""
+
+        class TypedLazyFrame(LazyFrame):
+            _schema = schema
+
+        return TypedLazyFrame
+
+    def __new__(cls, data: pl.LazyFrame, strict: bool = False):  # noqa: ARG003
+        """Create LazyFrame instance by copying internal state from source."""
+        instance = object.__new__(cls)
+        instance._ldf = data._ldf
+        return instance
+
+    def __init__(self, _data: pl.LazyFrame, strict: bool = False):
+        """
+        Initialize LazyFrame with schema validation.
+
+        Args:
+            data: Polars LazyFrame to wrap
+            strict: If True, raise error on extra columns not in schema
+        """
+        if self._schema is not None:
+            validate_lazyframe_schema(self, self._schema, strict=strict)
+
+    def collect(self) -> "DataFrame[SchemaT_co]":  # type: ignore[override]
+        """
+        Collect LazyFrame into DataFrame with full validation.
+
+        Returns:
+            DataFrame[Schema] with all validators applied
+        """
+        df = pl.LazyFrame.collect(self)
+        if self._schema is not None:
+            return DataFrame[self._schema](df)  # type: ignore[valid-type]
+        return DataFrame(df)
+
+    @classmethod
+    def make_empty(cls) -> "LazyFrame[SchemaT_co]":
+        """
+        Create an empty LazyFrame with columns from the schema.
+
+        Returns:
+            LazyFrame: Empty LazyFrame with correct column types
+        """
+        if cls._schema is None:
+            return cls(pl.LazyFrame({}))
+
+        from pavise._polars.validation import _extract_type_and_validators
+
+        type_hints = get_type_hints(cls._schema, include_extras=True)
+        columns = {}
+
+        for col_name, col_type in type_hints.items():
+            base_type, _, _, _ = _extract_type_and_validators(col_type)
+
+            if get_origin(base_type) is Literal:
+                literal_values = get_args(base_type)
+                if literal_values:
+                    first_value = literal_values[0]
+                    base_type = type(first_value)
+
+            dtype = _get_dtype_for_type(base_type)
+            columns[col_name] = pl.Series([], dtype=dtype)
+
+        return cls(pl.DataFrame(columns).lazy())
