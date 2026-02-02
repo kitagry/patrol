@@ -137,7 +137,9 @@ def validate_dataframe(df: pd.DataFrame, schema: type, strict: bool = False) -> 
             raise ValidationError(f"Strict mode: unexpected columns {sorted(extra_cols)}")
 
 
-def _extract_type_and_validators(annotation: type) -> tuple[type, list, bool, bool]:
+def _extract_type_and_validators(
+    annotation: type,
+) -> tuple[type | tuple[type, ...], list, bool, bool]:
     """
     Extract base type, validators, nullable flag, and not-required flag from a type annotation.
 
@@ -152,6 +154,8 @@ def _extract_type_and_validators(annotation: type) -> tuple[type, list, bool, bo
         - For Optional[int]: (int, [], True, False)
         - For NotRequiredColumn[int]: (int, [], False, True)
         - For NotRequiredColumn[Optional[int]]: (int, [], True, True)
+        - For Union[int, str]: ((int, str), [], False, False)
+        - For Union[int, str, None]: ((int, str), [], True, False)
     """
     validators = []
     is_optional = False
@@ -170,10 +174,19 @@ def _extract_type_and_validators(annotation: type) -> tuple[type, list, bool, bo
     origin = get_origin(annotation)
     if origin is Union:
         args = get_args(annotation)
-        if len(args) == 2 and type(None) in args:
+        # Check if None is in the union
+        if type(None) in args:
             is_optional = True
-            base_type = args[0] if args[1] is type(None) else args[1]
-            return base_type, validators, is_optional, is_not_required
+            # Remove None from the union
+            non_none_types = tuple(arg for arg in args if arg is not type(None))
+            # If only one type remains after removing None, return it as a single type
+            if len(non_none_types) == 1:
+                base_type = non_none_types[0]
+                return base_type, validators, is_optional, is_not_required
+            # Otherwise, return the tuple of types
+            return non_none_types, validators, is_optional, is_not_required
+        # Union without None - return all types as a tuple
+        return args, validators, is_optional, is_not_required
 
     return annotation, validators, is_optional, is_not_required
 
@@ -341,6 +354,38 @@ def _check_column_type(df: pd.DataFrame, col_name: str, expected_type: type) -> 
                 len(invalid_df),
                 repr,
             )
+        for validator in validators:
+            apply_validator(df[col_name], validator, col_name)
+        return
+
+    # Handle Union types (represented as tuple)
+    if isinstance(base_type, tuple):
+        union_types = base_type
+        # Check if all types in the union are supported
+        for union_type in union_types:
+            if union_type not in TYPE_CHECKERS:
+                raise ValidationError(f"unsupported type: {union_type}", column_name=col_name)
+
+        # Check if each value matches at least one of the union types
+        def check_union_value(value):
+            if pd.isna(value):
+                return is_optional
+            return any(TYPE_CHECKERS[t].value(value) for t in union_types)
+
+        invalid_mask = ~df[col_name].apply(check_union_value)
+        if invalid_mask.any():
+            invalid_df = df[col_name][invalid_mask]
+            samples = [(idx, invalid_df[idx]) for idx in invalid_df.index]
+            samples = samples[:MAX_SAMPLE_SIZE]
+            union_type_names = " | ".join(t.__name__ for t in union_types)
+            raise ValidationError.new_with_samples(
+                col_name,
+                f"expected {union_type_names}, got {df[col_name].dtype}",
+                samples,
+                len(invalid_df),
+                repr,
+            )
+
         for validator in validators:
             apply_validator(df[col_name], validator, col_name)
         return

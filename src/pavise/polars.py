@@ -29,6 +29,10 @@ def _build_empty_columns(schema: type) -> dict[str, pl.Series]:
     for col_name, col_type in type_hints.items():
         base_type, _, _, _ = _extract_type_and_validators(col_type)
 
+        # Handle Union types (represented as tuple) - use first type
+        if isinstance(base_type, tuple):
+            base_type = base_type[0]
+
         if get_origin(base_type) is Literal:
             literal_values = get_args(base_type)
             if literal_values:
