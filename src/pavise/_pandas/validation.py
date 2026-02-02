@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import types
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import (
     Annotated,
     Any,
-    Callable,
     Literal,
     Union,
     get_args,
@@ -33,7 +34,7 @@ class TypeChecker:
     """Type checker with both dtype-level and value-level validation."""
 
     dtype: Callable[[pd.Series | pd.Index], bool]  # Check dtype of entire Series
-    value: Callable[[object], bool]  # Check individual values
+    value: Callable[[Any], bool]  # Check individual values
 
 
 def type_check_str(df: pd.Series | pd.Index) -> bool:
@@ -172,7 +173,8 @@ def _extract_type_and_validators(
         annotation = base_type
 
     origin = get_origin(annotation)
-    if origin is Union:
+    # Handle both Union[int, str] and int | str (PEP 604)
+    if origin is Union or isinstance(annotation, types.UnionType):
         args = get_args(annotation)
         # Check if None is in the union
         if type(None) in args:
@@ -227,7 +229,8 @@ def _extract_index_name_type_and_validators(
         annotation = base_type
 
     origin = get_origin(annotation)
-    if origin is Union:
+    # Handle both Union[int, str] and int | str (PEP 604)
+    if origin is Union or isinstance(annotation, types.UnionType):
         args = get_args(annotation)
         if len(args) == 2 and type(None) in args:
             is_optional = True
