@@ -123,6 +123,10 @@ class DataFrame(pd.DataFrame, Generic[SchemaT_co]):
                 col_type
             )
 
+            # Handle Union types (represented as tuple) - use first type
+            if isinstance(base_type, tuple):
+                base_type = base_type[0]
+
             if get_origin(base_type) is Literal:
                 literal_values = get_args(base_type)
                 if literal_values:

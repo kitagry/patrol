@@ -140,6 +140,39 @@ invalid_df = pd.DataFrame({
 DataFrame[UserSchema](invalid_df)  # ValidationError
 ```
 
+### Union Types
+
+Union types allow columns to accept multiple different types:
+
+```python
+from typing import Protocol, Union
+import pandas as pd
+from pavise.pandas import DataFrame
+
+class MixedSchema(Protocol):
+    code: Union[int, str]  # Can be int or str
+    value: float
+
+# Accept int values
+df1 = pd.DataFrame({'code': [1, 2, 3], 'value': [1.0, 2.0, 3.0]})
+validated1 = DataFrame[MixedSchema](df1)  # OK
+
+# Accept str values
+df2 = pd.DataFrame({'code': ['A', 'B', 'C'], 'value': [1.0, 2.0, 3.0]})
+validated2 = DataFrame[MixedSchema](df2)  # OK
+
+# Accept mixed int/str values
+df3 = pd.DataFrame({'code': [1, 'B', 3, 'D'], 'value': [1.0, 2.0, 3.0, 4.0]})
+validated3 = DataFrame[MixedSchema](df3)  # OK
+
+# Union with None for nullable union types
+class NullableUnionSchema(Protocol):
+    code: Union[int, str, None]  # Can be int, str, or None
+
+df4 = pd.DataFrame({'code': [1, 'B', None, 4]})
+validated4 = DataFrame[NullableUnionSchema](df4)  # OK
+```
+
 ### Extra Columns are Ignored
 
 ```python
@@ -175,6 +208,8 @@ validated = DataFrame[SimpleSchema](df)  # OK
 
 ### Generic Types
 - `Optional[T]` - Nullable types (e.g., `Optional[int]`, `Optional[str]`)
+- `Union[T1, T2, ...]` - Union types allowing multiple types (e.g., `Union[int, str]`, `Union[int, str, float]`)
+  - Can be combined with `None` for nullable unions: `Union[int, str, None]`
 - `Literal[...]` - Specific literal values (e.g., `Literal["a", "b", "c"]`, `Literal[1, 2, 3]`)
 - `NotRequiredColumn[T]` - Optional columns (e.g., `NotRequiredColumn[int]`, `NotRequiredColumn[Optional[str]]`)
 

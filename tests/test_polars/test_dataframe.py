@@ -1,5 +1,5 @@
 from datetime import date, datetime, timedelta
-from typing import Annotated, Any, Literal, Optional, Protocol
+from typing import Annotated, Any, Literal, Optional, Protocol, Union
 
 import pytest
 
@@ -468,3 +468,107 @@ def test_dataframe_with_any_type_accepts_str_column():
     result = DataFrame[AnyTypeSchema](df)
     assert isinstance(result, pl.DataFrame)
     assert result.equals(df)
+
+
+class UnionTypeSchema(Protocol):
+    code: Union[int, str]
+    value: float
+
+
+class UnionMultiTypeSchema(Protocol):
+    mixed: Union[int, str, float]
+    value: int
+
+
+class UnionWithNoneSchema(Protocol):
+    code: Union[int, str, None]
+    name: str
+
+
+def test_dataframe_with_union_type_accepts_int():
+    """DataFrame[Schema] with Union[int, str] accepts int values"""
+    df = pl.DataFrame({"code": [1, 2, 3], "value": [1.0, 2.0, 3.0]})
+    result = DataFrame[UnionTypeSchema](df)
+    assert isinstance(result, pl.DataFrame)
+    assert result.equals(df)
+
+
+def test_dataframe_with_union_type_accepts_str():
+    """DataFrame[Schema] with Union[int, str] accepts str values"""
+    df = pl.DataFrame({"code": ["A", "B", "C"], "value": [1.0, 2.0, 3.0]})
+    result = DataFrame[UnionTypeSchema](df)
+    assert isinstance(result, pl.DataFrame)
+    assert result.equals(df)
+
+
+def test_dataframe_with_union_type_accepts_mixed():
+    """DataFrame[Schema] with Union[int, str] accepts mixed int/str values"""
+    df = pl.DataFrame(
+        {"code": pl.Series([1, "B", 3, "D"], dtype=pl.Object), "value": [1.0, 2.0, 3.0, 4.0]}
+    )
+    result = DataFrame[UnionTypeSchema](df)
+    assert isinstance(result, pl.DataFrame)
+    # Validation passed - check that data is preserved
+    assert result.shape == df.shape
+    assert result.columns == df.columns
+
+
+def test_dataframe_with_union_type_raises_on_wrong_type():
+    """DataFrame[Schema] with Union[int, str] raises error for invalid type"""
+    df = pl.DataFrame({"code": pl.Series([1, 2.5, 3], dtype=pl.Object), "value": [1.0, 2.0, 3.0]})
+    with pytest.raises(ValidationError, match="Column 'code': expected int \\| str"):
+        DataFrame[UnionTypeSchema](df)
+
+
+def test_dataframe_with_union_multi_type_accepts_all_types():
+    """DataFrame[Schema] with Union[int, str, float] accepts all union types"""
+    df = pl.DataFrame(
+        {"mixed": pl.Series([1, "text", 3.14, 42], dtype=pl.Object), "value": [1, 2, 3, 4]}
+    )
+    result = DataFrame[UnionMultiTypeSchema](df)
+    assert isinstance(result, pl.DataFrame)
+    # Validation passed - check that data is preserved
+    assert result.shape == df.shape
+    assert result.columns == df.columns
+
+
+def test_dataframe_with_union_and_none_accepts_none():
+    """DataFrame[Schema] with Union[int, str, None] accepts None values"""
+    df = pl.DataFrame(
+        {"code": pl.Series([1, "B", None, 4], dtype=pl.Object), "name": ["a", "b", "c", "d"]}
+    )
+    result = DataFrame[UnionWithNoneSchema](df)
+    assert isinstance(result, pl.DataFrame)
+    # Validation passed - check that data is preserved
+    assert result.shape == df.shape
+    assert result.columns == df.columns
+
+
+def test_dataframe_with_union_and_none_accepts_mixed():
+    """DataFrame[Schema] with Union[int, str, None] accepts mixed values"""
+    df = pl.DataFrame({"code": pl.Series([1, None, "C"], dtype=pl.Object), "name": ["a", "b", "c"]})
+    result = DataFrame[UnionWithNoneSchema](df)
+    assert isinstance(result, pl.DataFrame)
+    # Validation passed - check that data is preserved
+    assert result.shape == df.shape
+    assert result.columns == df.columns
+
+
+def test_dataframe_with_union_and_none_raises_on_invalid_type():
+    """DataFrame[Schema] with Union[int, str, None] raises error for invalid type"""
+    df = pl.DataFrame({"code": pl.Series([1, "B", 3.14], dtype=pl.Object), "name": ["a", "b", "c"]})
+    with pytest.raises(ValidationError, match="Column 'code': expected int \\| str"):
+        DataFrame[UnionWithNoneSchema](df)
+
+
+def test_empty_creates_empty_dataframe_with_union_types():
+    """DataFrame.make_empty() creates an empty DataFrame with Union types"""
+    result = DataFrame[UnionTypeSchema].make_empty()
+
+    expected = pl.DataFrame(
+        {
+            "code": pl.Series([], dtype=pl.Int64),  # Use first type in Union
+            "value": pl.Series([], dtype=pl.Float64),
+        }
+    )
+    assert result.equals(expected)
