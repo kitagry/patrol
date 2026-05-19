@@ -89,7 +89,7 @@ class DataFrame(pd.DataFrame, Generic[SchemaT_co]):
             validate_dataframe(self, self._schema, strict=strict)
 
     @classmethod
-    def make_empty(cls):
+    def make_empty(cls) -> "DataFrame[SchemaT_co]":
         """
         Create an empty DataFrame with columns from the schema.
 
