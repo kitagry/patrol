@@ -41,7 +41,9 @@ def apply_validator(series: pd.Series, validator: Any, col_name: str) -> None:
         raise ValidationError(f"Unknown validator type: {type(validator)}")
 
 
-def _get_invalid_samples(series: pd.Series, invalid_mask: pd.Series) -> tuple[list[tuple], int]:
+def _get_invalid_samples(
+    series: pd.Series, invalid_mask: pd.Series
+) -> tuple[list[tuple[Any, Any]], int]:
     """
     Extract invalid samples and total count from an invalid mask.
 
@@ -52,8 +54,8 @@ def _get_invalid_samples(series: pd.Series, invalid_mask: pd.Series) -> tuple[li
     Returns:
         Tuple of (samples, total_invalid) where samples is a list of (index, value) tuples
     """
-    invalid_indices = series.index[invalid_mask][:MAX_SAMPLE_SIZE]
-    samples = [(idx, series.loc[idx]) for idx in invalid_indices]
+    invalid_indices: list[Any] = list(series.index[invalid_mask])[:MAX_SAMPLE_SIZE]  # type: ignore[index]
+    samples: list[tuple[Any, Any]] = [(idx, series.loc[idx]) for idx in invalid_indices]
     total_invalid = invalid_mask.sum()
     return samples, total_invalid
 
@@ -148,8 +150,8 @@ def _validate_maxlen(series: pd.Series, validator: MaxLen, col_name: str) -> Non
 
 def _validate_custom(series: pd.Series, validator: Custom, col_name: str) -> None:
     """Validate using a custom function."""
-    invalid_mask = ~series.apply(validator.func)
-    if not invalid_mask.any():
+    invalid_mask: pd.Series = ~series.apply(validator.func)  # type: ignore[assignment]
+    if not bool(invalid_mask.any()):
         return
 
     samples, total_invalid = _get_invalid_samples(series, invalid_mask)

@@ -1,4 +1,4 @@
-from typing import Annotated, Protocol
+from typing import Annotated, Any, Protocol
 
 import pandas as pd
 import pytest
@@ -123,7 +123,7 @@ def test_maxlen_validator_rejects_long_strings():
         DataFrame[UsernameMaxLenSchema](df)
 
 
-def is_positive(value) -> bool:
+def is_positive(value: Any) -> bool:
     """Custom validator function for testing."""
     return value > 0
 

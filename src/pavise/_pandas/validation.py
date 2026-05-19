@@ -140,7 +140,7 @@ def validate_dataframe(df: pd.DataFrame, schema: type, strict: bool = False) -> 
 
 def _extract_type_and_validators(
     annotation: type,
-) -> tuple[type | tuple[type, ...], list, bool, bool]:
+) -> tuple[type | tuple[type, ...], list[Any], bool, bool]:
     """
     Extract base type, validators, nullable flag, and not-required flag from a type annotation.
 
@@ -195,7 +195,7 @@ def _extract_type_and_validators(
 
 def _extract_index_name_type_and_validators(
     annotation: type,
-) -> tuple[type, str | tuple[str, ...] | None, list, bool]:
+) -> tuple[type, str | tuple[str, ...] | None, list[Any], bool]:
     """
     Extract base type, index name, validators, and nullable flag from an index type annotation.
 
@@ -273,7 +273,7 @@ def _check_multiindex_type(
     df: pd.DataFrame,
     expected_types: type,
     index_names: tuple[str, ...] | None,
-    validators: list,
+    validators: list[Any],
     is_optional: bool,
 ) -> None:
     """Check if MultiIndex has the expected types and names."""
@@ -329,9 +329,10 @@ def _check_column_type(df: pd.DataFrame, col_name: str, expected_type: type) -> 
     base_type, validators, is_optional, _is_not_required = _extract_type_and_validators(
         expected_type
     )
+    col_series: pd.Series = df[col_name]  # type: ignore[assignment]
 
     if isinstance(base_type, type) and issubclass(base_type, pd.api.extensions.ExtensionDtype):
-        col_dtype = df[col_name].dtype
+        col_dtype = col_series.dtype
         if type(col_dtype) is not base_type:
             base_tname = base_type.__name__
             col_tname = type(col_dtype).__name__
@@ -340,15 +341,15 @@ def _check_column_type(df: pd.DataFrame, col_name: str, expected_type: type) -> 
                 column_name=col_name,
             )
         for validator in validators:
-            apply_validator(df[col_name], validator, col_name)
+            apply_validator(col_series, validator, col_name)
         return
 
     if get_origin(base_type) is Literal:
         allowed_values = get_args(base_type)
-        invalid_mask = ~df[col_name].isin(allowed_values)
+        invalid_mask = ~col_series.isin(allowed_values)
         if invalid_mask.any():
-            invalid_df = df[col_name][invalid_mask]
-            samples = [(idx, invalid_df[idx]) for idx in invalid_df.index]
+            invalid_df: pd.Series = col_series[invalid_mask]  # type: ignore[assignment]
+            samples: list[tuple[Any, Any]] = [(idx, invalid_df[idx]) for idx in invalid_df.index]
             samples = samples[:MAX_SAMPLE_SIZE]
             raise ValidationError.new_with_samples(
                 col_name,
@@ -358,7 +359,7 @@ def _check_column_type(df: pd.DataFrame, col_name: str, expected_type: type) -> 
                 repr,
             )
         for validator in validators:
-            apply_validator(df[col_name], validator, col_name)
+            apply_validator(col_series, validator, col_name)
         return
 
     # Handle Union types (represented as tuple)
@@ -370,49 +371,49 @@ def _check_column_type(df: pd.DataFrame, col_name: str, expected_type: type) -> 
                 raise ValidationError(f"unsupported type: {union_type}", column_name=col_name)
 
         # Check if each value matches at least one of the union types
-        def check_union_value(value):
+        def check_union_value(value: Any) -> bool:
             if pd.isna(value):
                 return is_optional
             return any(TYPE_CHECKERS[t].value(value) for t in union_types)
 
-        invalid_mask = ~df[col_name].apply(check_union_value)
-        if invalid_mask.any():
-            invalid_df = df[col_name][invalid_mask]
+        invalid_mask = ~col_series.apply(check_union_value)
+        if bool(invalid_mask.any()):
+            invalid_df = col_series[invalid_mask]  # type: ignore[assignment]
             samples = [(idx, invalid_df[idx]) for idx in invalid_df.index]
             samples = samples[:MAX_SAMPLE_SIZE]
             union_type_names = " | ".join(t.__name__ for t in union_types)
             raise ValidationError.new_with_samples(
                 col_name,
-                f"expected {union_type_names}, got {df[col_name].dtype}",
+                f"expected {union_type_names}, got {col_series.dtype}",
                 samples,
                 len(invalid_df),
                 repr,
             )
 
         for validator in validators:
-            apply_validator(df[col_name], validator, col_name)
+            apply_validator(col_series, validator, col_name)
         return
 
     if base_type not in TYPE_CHECKERS:
         raise ValidationError(f"unsupported type: {base_type}", column_name=col_name)
 
     checker = TYPE_CHECKERS[base_type]
-    col_dtype = df[col_name].dtype
+    col_dtype = col_series.dtype
 
-    if not is_optional and df[col_name].isna().any():
+    if not is_optional and col_series.isna().any():
         raise ValidationError("is non-optional but contains null values", column_name=col_name)
-    if not checker.dtype(df[col_name]):
-        invalid_mask = df[col_name].apply(checker.value)
-        invalid_df = df[col_name][~invalid_mask]
+    if not checker.dtype(col_series):
+        invalid_mask = col_series.apply(checker.value)
+        invalid_df = col_series[~invalid_mask]  # type: ignore[assignment]
         samples = [(idx, invalid_df[idx]) for idx in invalid_df.index]
         samples = samples[:MAX_SAMPLE_SIZE]
         raise ValidationError.new_with_samples(
             col_name,
             f"expected {base_type.__name__}, got {col_dtype}",
             samples,
-            len(df[col_name][~invalid_mask]),
+            len(col_series[~invalid_mask]),  # type: ignore[arg-type]
             repr,
         )
 
     for validator in validators:
-        apply_validator(df[col_name], validator, col_name)
+        apply_validator(col_series, validator, col_name)

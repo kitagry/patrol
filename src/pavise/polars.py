@@ -1,6 +1,6 @@
 """Polars backend for type-parameterized DataFrame with Protocol-based schema validation."""
 
-from typing import Generic, Literal, TypeVar, get_args, get_origin, get_type_hints
+from typing import Any, Generic, Literal, TypeVar, get_args, get_origin, get_type_hints
 
 try:
     import polars as pl
@@ -90,7 +90,7 @@ class DataFrame(pl.DataFrame, Generic[SchemaT_co]):
 
         return TypedDataFrame
 
-    def __init__(self, data, *args, strict=False, **kwargs):
+    def __init__(self, data: Any, *args: Any, strict: bool = False, **kwargs: Any):
         """
         Initialize DataFrame with optional schema validation.
 

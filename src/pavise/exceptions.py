@@ -28,7 +28,7 @@ class ValidationError(PatrolError):
         self,
         base_message: str,
         column_name: str | None = None,
-        invalid_samples: list[tuple] | None = None,
+        invalid_samples: list[tuple[Any, ...]] | None = None,
     ):
         msg = base_message
         if column_name:
@@ -42,7 +42,7 @@ class ValidationError(PatrolError):
         cls,
         col_name: str,
         base_message: str,
-        samples: list[tuple],
+        samples: list[tuple[Any, ...]],
         total_invalid: int,
         format_value: Callable[[Any], str] = repr,
     ) -> Self:

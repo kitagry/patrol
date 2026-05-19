@@ -44,7 +44,9 @@ def apply_validator(series: "pl.Series", validator: Any, col_name: str) -> None:
         raise ValidationError(f"Unknown validator type: {type(validator)}")
 
 
-def _get_invalid_samples(series: "pl.Series", invalid_mask: "pl.Series") -> tuple[list[tuple], int]:
+def _get_invalid_samples(
+    series: "pl.Series", invalid_mask: "pl.Series"
+) -> tuple[list[tuple[Any, Any]], int]:
     """
     Extract invalid samples and total count from an invalid mask.
 

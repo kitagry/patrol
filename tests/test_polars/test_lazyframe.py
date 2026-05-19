@@ -4,18 +4,12 @@ from typing import Literal, Protocol
 
 import pytest
 
-try:
-    import polars as pl
+pytest.importorskip("polars")
 
-    from pavise.exceptions import ValidationError
-    from pavise.polars import DataFrame, LazyFrame
+import polars as pl
 
-    POLARS_AVAILABLE = True
-except ImportError:
-    POLARS_AVAILABLE = False
-
-
-pytestmark = pytest.mark.skipif(not POLARS_AVAILABLE, reason="Polars not installed")
+from pavise.exceptions import ValidationError
+from pavise.polars import DataFrame, LazyFrame
 
 
 class SimpleSchema(Protocol):

@@ -5,20 +5,14 @@ from typing import Annotated, Any, Literal, Optional, Protocol, Union
 
 import pytest
 
-try:
-    import polars as pl
+pytest.importorskip("polars")
 
-    from pavise.exceptions import ValidationError
-    from pavise.polars import DataFrame
-    from pavise.types import NotRequiredColumn
-    from pavise.validators import Range, Unique
+import polars as pl
 
-    POLARS_AVAILABLE = True
-except ImportError:
-    POLARS_AVAILABLE = False
-
-
-pytestmark = pytest.mark.skipif(not POLARS_AVAILABLE, reason="Polars not installed")
+from pavise.exceptions import ValidationError
+from pavise.polars import DataFrame
+from pavise.types import NotRequiredColumn
+from pavise.validators import Range, Unique
 
 
 class SimpleSchema(Protocol):
