@@ -39,7 +39,7 @@ class TypeChecker:
     value: Callable[[object], bool]  # Check individual values
 
 
-def _is_datetime_dtype(dtype):
+def _is_datetime_dtype(dtype: Any) -> bool:
     """Check if dtype is a Datetime type (with any time unit)."""
     if dtype == pl.Datetime:
         return True
@@ -214,7 +214,7 @@ def _check_lazyframe_column_type(lf_schema: pl.Schema, col_name: str, expected_t
 
 def _extract_type_and_validators(
     annotation: type,
-) -> tuple[type | tuple[type, ...], list, bool, bool]:
+) -> tuple[type | tuple[type, ...], list[Any], bool, bool]:
     """
     Extract base type, validators, nullable flag, and not-required flag from a type annotation.
 
@@ -268,7 +268,7 @@ def _extract_type_and_validators(
 
 
 def _raise_type_error_with_samples(
-    df: pl.DataFrame, col_name: str, checker: TypeChecker, expected_type: type, actual_dtype
+    df: pl.DataFrame, col_name: str, checker: TypeChecker, expected_type: type, actual_dtype: Any
 ) -> None:
     """Raise TypeError with sample invalid values."""
     invalid_mask = df[col_name].map_elements(lambda v: not checker.value(v))
@@ -342,7 +342,7 @@ def _check_column_type(df: pl.DataFrame, col_name: str, expected_type: type) -> 
                 raise ValidationError(f"unsupported type: {union_type}", column_name=col_name)
 
         # Check if each value matches at least one of the union types
-        def check_union_value(value):
+        def check_union_value(value: Any) -> bool:
             if value is None:
                 return is_optional
             return any(TYPE_CHECKERS[t].value(value) for t in union_types)
